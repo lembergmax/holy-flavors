@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.venv/
+venv/
+.idea/
+.vscode/
+build/
+dist/
+*.spec
+
+# Local catalog, product-image cache, ratings, tasting notes, and backups.
+# Keep the directory itself so a fresh clone has the expected structure.
+data/*
+!data/.gitkeep
