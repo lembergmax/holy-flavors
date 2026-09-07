@@ -12,8 +12,9 @@ from PyQt6.QtGui import QColor, QImage
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QScrollArea
 
-from holy_flavors.main_window import MainWindow
 from holy_flavors.catalog import image_cache_path, variant_image_cache_path
+from holy_flavors.dialogs import ShoppingListDialog
+from holy_flavors.main_window import MainWindow
 from holy_flavors.models import Catalog, Flavor, ProductVariant, UserFlavorState
 from holy_flavors.storage import AppPaths, Storage
 from holy_flavors.styles import application_stylesheet
@@ -304,6 +305,54 @@ class UiSmokeTests(unittest.TestCase):
             self.assertTrue(window.detail_scroll.isHidden())
             self.assertTrue(storage.load_user_states()[flavor.source_key].wishlist)
             window.close()
+
+    def test_shopping_list_applies_package_size_without_immediate_issue_list(self) -> None:
+        available_tub = Flavor(
+            source_key="energy:tub",
+            name="Tub",
+            category="Energy",
+            description="Test",
+            product_url="https://de.holy.com/products/tub",
+            image_url="",
+            variants=(
+                ProductVariant(123, "10 Portionen", 1299, True),
+                ProductVariant(124, "50 Portionen", 3999, True),
+            ),
+        )
+        box_only = Flavor(
+            source_key="energy:box",
+            name="Box",
+            category="Energy",
+            description="Test",
+            product_url="https://de.holy.com/products/box",
+            image_url="",
+            variants=(ProductVariant(125, "10 Portionen", 1299, True),),
+        )
+        states = {
+            available_tub.source_key: UserFlavorState(wishlist=True),
+            box_only.source_key: UserFlavorState(wishlist=True),
+        }
+        dialog = ShoppingListDialog(
+            Catalog((available_tub, box_only), "now"),
+            states,
+            lambda: None,
+        )
+
+        self.assertNotIn("Please fix", dialog.issue_label.text())
+        self.assertTrue(dialog.cart_button.isEnabled())
+
+        dialog.bulk_size_combo.setCurrentText("Tub · 50 servings")
+        dialog.bulk_size_button.click()
+
+        self.assertEqual(124, states[available_tub.source_key].selected_variant_id)
+        self.assertIsNone(states[box_only.source_key].selected_variant_id)
+        self.assertNotIn("Please fix", dialog.issue_label.text())
+
+        dialog._open_cart()
+
+        self.assertIn("Please fix these items first", dialog.issue_label.text())
+        self.assertIn("Box: Please choose a package size.", dialog.issue_label.text())
+        dialog.close()
 
 
 if __name__ == "__main__":

@@ -21,7 +21,13 @@ from PyQt6.QtWidgets import (
 )
 
 from holy_flavors.models import Catalog, Flavor, UserFlavorState
-from holy_flavors.services import build_cart_url, display_variant_title, validate_cart
+from holy_flavors.services import (
+    PACKAGE_SIZES,
+    apply_package_size_to_cart,
+    build_cart_url,
+    display_variant_title,
+    validate_cart,
+)
 
 
 class ShoppingListDialog(QDialog):
@@ -36,6 +42,7 @@ class ShoppingListDialog(QDialog):
         self._catalog = catalog
         self._states = states
         self._changed_callback = changed_callback
+        self._issues_visible = False
         self.setWindowTitle("Shopping list")
         self.resize(970, 560)
         self._build_ui()
@@ -56,6 +63,18 @@ class ShoppingListDialog(QDialog):
         subtitle.setObjectName("muted")
         subtitle.setWordWrap(True)
         layout.addWidget(subtitle)
+
+        bulk_row = QHBoxLayout()
+        bulk_label = QLabel("Set package size for all")
+        bulk_label.setObjectName("brandSmall")
+        self.bulk_size_combo = QComboBox()
+        self.bulk_size_combo.addItems(PACKAGE_SIZES[1:])
+        self.bulk_size_button = QPushButton("Apply where available")
+        self.bulk_size_button.clicked.connect(self._apply_package_size_to_all)
+        bulk_row.addWidget(bulk_label)
+        bulk_row.addWidget(self.bulk_size_combo, 1)
+        bulk_row.addWidget(self.bulk_size_button)
+        layout.addLayout(bulk_row)
 
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
@@ -117,6 +136,21 @@ class ShoppingListDialog(QDialog):
             self.table.setCellWidget(row, 4, remove)
         self._update_issues()
 
+    def _apply_package_size_to_all(self) -> None:
+        package_size = self.bulk_size_combo.currentText()
+        changed = apply_package_size_to_cart(
+            self._catalog,
+            self._states,
+            package_size,
+        )
+        self._changed_callback()
+        self._issues_visible = False
+        self._rebuild()
+        self.issue_label.setText(
+            f"{package_size} applied to {changed} shopping list items."
+        )
+        self.issue_label.setStyleSheet("color: #257331; font-weight: 650;")
+
     def _variant_combo(
         self,
         flavor: Flavor,
@@ -144,6 +178,7 @@ class ShoppingListDialog(QDialog):
         value = combo.currentData()
         self._states[key].selected_variant_id = int(value) if value is not None else None
         self._changed_callback()
+        self._issues_visible = False
         self._update_issues()
 
     def _quantity_changed(self, key: str, value: int) -> None:
@@ -158,14 +193,21 @@ class ShoppingListDialog(QDialog):
     def _update_issues(self) -> None:
         wishlist_count = sum(state.wishlist for state in self._states.values())
         issues = validate_cart(self._catalog, self._states)
-        self.cart_button.setEnabled(wishlist_count > 0 and not issues)
+        self.cart_button.setEnabled(wishlist_count > 0)
+        self.bulk_size_button.setEnabled(wishlist_count > 0)
         if not wishlist_count:
             self.issue_label.setText("Your shopping list is empty.")
             self.issue_label.setStyleSheet("color: #5D5D59;")
-        elif issues:
+        elif issues and self._issues_visible:
             lines = [f"• {issue.flavor_name}: {issue.message}" for issue in issues]
             self.issue_label.setText("Please fix these items first:\n" + "\n".join(lines))
             self.issue_label.setStyleSheet("color: #A3261B; font-weight: 650;")
+        elif issues:
+            self.issue_label.setText(
+                f"{wishlist_count} flavors on the shopping list. "
+                "Open the cart when you are ready."
+            )
+            self.issue_label.setStyleSheet("color: #5D5D59;")
         else:
             self.issue_label.setText(
                 f"{wishlist_count} flavors are ready for the cart."
@@ -173,6 +215,11 @@ class ShoppingListDialog(QDialog):
             self.issue_label.setStyleSheet("color: #257331; font-weight: 650;")
 
     def _open_cart(self) -> None:
+        issues = validate_cart(self._catalog, self._states)
+        if issues:
+            self._issues_visible = True
+            self._update_issues()
+            return
         url = build_cart_url(self._catalog, self._states)
         lines = []
         for flavor in self._catalog.flavors:

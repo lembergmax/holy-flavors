@@ -5,6 +5,7 @@ import unittest
 from holy_flavors.models import Catalog, Flavor, ProductVariant, UserFlavorState
 from holy_flavors.services import (
     FilterOptions,
+    apply_package_size_to_cart,
     build_cart_url,
     calculate_progress,
     display_variant_title,
@@ -208,6 +209,40 @@ class ServiceTests(unittest.TestCase):
             build_cart_url(self.catalog, states)
         with self.assertRaises(ValueError):
             build_cart_url(self.catalog, {})
+
+    def test_package_size_can_be_applied_to_cart_where_available(self) -> None:
+        sample = Flavor(
+            source_key="energy:sample",
+            name="Sample",
+            category="Energy",
+            description="Test",
+            product_url="https://de.holy.com/products/sample",
+            image_url="",
+            variants=(
+                ProductVariant(1, "1 Portion", 199, True),
+                ProductVariant(2, "50 Portionen", 3999, True),
+            ),
+        )
+        box_only = Flavor(
+            source_key="energy:box",
+            name="Box",
+            category="Energy",
+            description="Test",
+            product_url="https://de.holy.com/products/box",
+            image_url="",
+            variants=(ProductVariant(3, "10 Portionen", 1299, True),),
+        )
+        catalog = Catalog((sample, box_only), "now")
+        states = {
+            sample.source_key: UserFlavorState(wishlist=True),
+            box_only.source_key: UserFlavorState(wishlist=True),
+        }
+
+        changed = apply_package_size_to_cart(catalog, states, "Tub · 50 servings")
+
+        self.assertEqual(1, changed)
+        self.assertEqual(2, states[sample.source_key].selected_variant_id)
+        self.assertIsNone(states[box_only.source_key].selected_variant_id)
 
     def test_import_preview_distinguishes_new_changed_and_unchanged(self) -> None:
         current = {

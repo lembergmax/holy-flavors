@@ -108,6 +108,24 @@ def matching_available_variant(
     )
 
 
+def apply_package_size_to_cart(
+    catalog: Catalog,
+    states: dict[str, UserFlavorState],
+    package_size: str,
+) -> int:
+    changed = 0
+    for flavor in catalog.flavors:
+        state = states.get(flavor.source_key, UserFlavorState())
+        if not state.wishlist:
+            continue
+        variant = matching_available_variant(flavor, package_size)
+        if variant is None or state.selected_variant_id == variant.id:
+            continue
+        state.selected_variant_id = variant.id
+        changed += 1
+    return changed
+
+
 def _package_size_for_variant(flavor: Flavor, variant_title: str) -> str | None:
     if flavor.category == "Syrup":
         return "Syrup · 3-pack"
