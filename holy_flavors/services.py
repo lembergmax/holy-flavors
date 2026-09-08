@@ -108,6 +108,14 @@ def matching_available_variant(
     )
 
 
+def smallest_available_variant(flavor: Flavor) -> ProductVariant | None:
+    for package_size in PACKAGE_SIZES[1:]:
+        variant = matching_available_variant(flavor, package_size)
+        if variant is not None:
+            return variant
+    return None
+
+
 def apply_package_size_to_cart(
     catalog: Catalog,
     states: dict[str, UserFlavorState],

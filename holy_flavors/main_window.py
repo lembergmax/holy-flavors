@@ -41,6 +41,7 @@ from holy_flavors.services import (
     display_variant_title,
     matching_available_variant,
     preview_import,
+    smallest_available_variant,
 )
 from holy_flavors.storage import Storage, StorageError
 from holy_flavors.styles import CATEGORY_COLORS, HOLY_YELLOW, INK
@@ -800,10 +801,13 @@ class MainWindow(QMainWindow):
             if not state.wishlist:
                 added += 1
             self._set_wishlist_state(flavor, state, True)
-            if package_size != "All sizes":
-                variant = matching_available_variant(flavor, package_size)
-                if variant is not None:
-                    state.selected_variant_id = variant.id
+            variant = (
+                smallest_available_variant(flavor)
+                if package_size == "All sizes"
+                else matching_available_variant(flavor, package_size)
+            )
+            if variant is not None:
+                state.selected_variant_id = variant.id
 
         self._schedule_save()
         self._update_header_counts()

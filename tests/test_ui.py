@@ -188,6 +188,36 @@ class UiSmokeTests(unittest.TestCase):
             self.assertTrue(storage.load_user_states()[matching.source_key].wishlist)
             window.close()
 
+    def test_visible_flavors_use_smallest_size_when_no_size_filter_is_active(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            storage = Storage(AppPaths(Path(temporary_directory)))
+            flavor = Flavor(
+                source_key="energy:size-order",
+                name="Size Order",
+                category="Energy",
+                description="Test",
+                product_url="https://de.holy.com/products/size-order",
+                image_url="",
+                variants=(
+                    ProductVariant(123, "50 Portionen", 3999, True),
+                    ProductVariant(124, "10 Portionen", 1299, True),
+                    ProductVariant(125, "1 Portion", 199, True),
+                ),
+            )
+            storage.save_catalog(Catalog((flavor,), "now"))
+            window = MainWindow(storage)
+
+            window.add_visible_button.click()
+            window._save_states()
+
+            self.assertTrue(window._states[flavor.source_key].wishlist)
+            self.assertEqual(125, window._states[flavor.source_key].selected_variant_id)
+            self.assertEqual(
+                125,
+                storage.load_user_states()[flavor.source_key].selected_variant_id,
+            )
+            window.close()
+
     def test_card_uses_filtered_variant_image_before_product_image(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             images_dir = Path(temporary_directory)

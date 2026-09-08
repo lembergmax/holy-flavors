@@ -12,6 +12,7 @@ from holy_flavors.services import (
     filter_and_sort_flavors,
     matching_available_variant,
     preview_import,
+    smallest_available_variant,
     validate_cart,
 )
 
@@ -149,6 +150,10 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(
             "https://cdn.example/sample.png",
             matching_available_variant(sized_flavor, "Sample · 1 serving").image_url,
+        )
+        self.assertEqual(
+            1,
+            smallest_available_variant(sized_flavor).id,
         )
 
     def test_common_shopify_variant_titles_are_displayed_in_english(self) -> None:
