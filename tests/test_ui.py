@@ -135,6 +135,59 @@ class UiSmokeTests(unittest.TestCase):
             self.assertEqual(0, tub_count)
             window.close()
 
+    def test_visible_filtered_flavors_can_be_added_to_shopping_list(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            storage = Storage(AppPaths(Path(temporary_directory)))
+            matching = Flavor(
+                source_key="energy:tub",
+                name="Energy Tub",
+                category="Energy",
+                description="Test",
+                product_url="https://de.holy.com/products/energy-tub",
+                image_url="",
+                variants=(
+                    ProductVariant(123, "10 Portionen", 1299, True),
+                    ProductVariant(124, "50 Portionen", 3999, True),
+                ),
+            )
+            wrong_size = Flavor(
+                source_key="energy:sample",
+                name="Energy Sample",
+                category="Energy",
+                description="Test",
+                product_url="https://de.holy.com/products/energy-sample",
+                image_url="",
+                variants=(ProductVariant(125, "1 Portion", 199, True),),
+            )
+            wrong_category = Flavor(
+                source_key="hydration:tub",
+                name="Hydration Tub",
+                category="Hydration",
+                description="Test",
+                product_url="https://de.holy.com/products/hydration-tub",
+                image_url="",
+                variants=(ProductVariant(126, "50 Portionen", 3999, True),),
+            )
+            storage.save_catalog(Catalog((matching, wrong_size, wrong_category), "now"))
+            window = MainWindow(storage)
+
+            window.category_buttons["Energy"].click()
+            window.size_combo.setCurrentText("Tub · 50 servings")
+            window.add_visible_button.click()
+            window._save_states()
+
+            self.assertTrue(window._states[matching.source_key].wishlist)
+            self.assertEqual(124, window._states[matching.source_key].selected_variant_id)
+            self.assertFalse(
+                window._states.get(wrong_size.source_key, UserFlavorState()).wishlist
+            )
+            self.assertFalse(
+                window._states.get(wrong_category.source_key, UserFlavorState()).wishlist
+            )
+            self.assertEqual("Shopping list  1", window.shopping_button.text())
+            self.assertTrue(storage.load_user_states()[matching.source_key].wishlist)
+            window.close()
+
     def test_card_uses_filtered_variant_image_before_product_image(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             images_dir = Path(temporary_directory)

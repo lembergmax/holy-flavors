@@ -281,6 +281,12 @@ class MainWindow(QMainWindow):
         self.random_button = QPushButton("Surprise me")
         self.random_button.setToolTip("Picks a visible flavor you have not tried yet")
         layout.addWidget(self.random_button)
+
+        self.add_visible_button = QPushButton("Add visible to shopping list")
+        self.add_visible_button.setToolTip(
+            "Adds every flavor that matches the current search and filters"
+        )
+        layout.addWidget(self.add_visible_button)
         layout.addStretch()
 
         self.catalog_info = QLabel()
@@ -404,6 +410,7 @@ class MainWindow(QMainWindow):
         self.flavor_grid.flavor_selected.connect(self._select_flavor)
         self.close_detail_button.clicked.connect(self._close_detail)
         self.random_button.clicked.connect(self._pick_random)
+        self.add_visible_button.clicked.connect(self._add_visible_to_shopping_list)
         self.refresh_button.clicked.connect(self._start_refresh)
         self.shopping_button.clicked.connect(self._open_shopping_list)
         self.import_action.triggered.connect(self._import_json)
@@ -504,15 +511,24 @@ class MainWindow(QMainWindow):
         if current is not None:
             self._populate_detail(current[0])
 
-    def _refresh_cards(self) -> None:
-        options = FilterOptions(
+    def _current_filter_options(self) -> FilterOptions:
+        return FilterOptions(
             search_text=self.search_edit.text(),
             categories=self._selected_categories(),
             statuses=self._selected_statuses(),
             package_size=self.size_combo.currentText(),
             sort_by=self.sort_combo.currentText(),
         )
-        flavors = filter_and_sort_flavors(self._catalog, self._states, options)
+
+    def _visible_flavors(self) -> list[Flavor]:
+        return filter_and_sort_flavors(
+            self._catalog,
+            self._states,
+            self._current_filter_options(),
+        )
+
+    def _refresh_cards(self) -> None:
+        flavors = self._visible_flavors()
         cards: list[FlavorCard] = []
         for flavor in flavors:
             card = FlavorCard(
@@ -533,6 +549,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             f"{len(flavors)} flavors visible · catalog refreshes only when requested"
         )
+        self.add_visible_button.setEnabled(bool(flavors))
 
     def _select_flavor(self, source_key: str) -> None:
         flavor = self._catalog.by_key().get(source_key)
@@ -772,6 +789,32 @@ class MainWindow(QMainWindow):
         self._state_changed(flavor)
         if self._current_key == source_key:
             self._populate_detail(flavor)
+
+    def _add_visible_to_shopping_list(self) -> None:
+        package_size = self.size_combo.currentText()
+        added = 0
+        for flavor in self._visible_flavors():
+            if flavor.archived:
+                continue
+            state = get_state(self._states, flavor.source_key)
+            if not state.wishlist:
+                added += 1
+            self._set_wishlist_state(flavor, state, True)
+            if package_size != "All sizes":
+                variant = matching_available_variant(flavor, package_size)
+                if variant is not None:
+                    state.selected_variant_id = variant.id
+
+        self._schedule_save()
+        self._update_header_counts()
+        self._refresh_cards()
+        if self._current_key:
+            flavor = self._catalog.by_key().get(self._current_key)
+            if flavor:
+                self._populate_detail(flavor)
+        self.statusBar().showMessage(
+            f"Added {added} visible flavors to the shopping list", 8000
+        )
 
     @staticmethod
     def _set_wishlist_state(
